@@ -9,9 +9,27 @@ datasource db {
 
 model User {
   id        String   @id @default(cuid())
-  googleId  String   @unique
   email     String   @unique
   name      String
-  picture   String?
   createdAt DateTime @default(now())
+  accounts ConnectedAccount[]
+}
+
+model ConnectedAccount{
+  id String @id @default(cuid())
+  provider String
+  providerUserId String
+  accessToken String?
+
+  refreshToken String?
+
+  expiresAt DateTime?
+
+  userId String
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([provider, providerUserId])
 }
