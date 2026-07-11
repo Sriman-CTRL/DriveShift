@@ -1,18 +1,14 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import dotenv from "dotenv";
-import { UserService } from "./auth.service.js";
-
-dotenv.config();
-
-const userService = new UserService();
+import { env } from "../config/env.js";
+import { authService } from "./auth.service.js";
 
 passport.use(
   new GoogleStrategy(
     {
-      clientID: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: "/auth/google/callback",
+      clientID: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      callbackURL: env.GOOGLE_CALLBACK_URL,
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
@@ -21,15 +17,13 @@ passport.use(
           return done(new Error("No email found in Google profile"));
         }
 
-        let user = await userService.findUserEmail(email);
-        if (!user) {
-          user = await userService.createUser({
-            googleId: profile.id,
-            email: email,
-            name: profile.displayName,
-            picture: profile.photos?.[0]?.value,
-          });
-        }
+        const user = await authService.findOrCreateAccount({
+          provider: "google",
+          providerUserId: profile.id,
+          email: email,
+          name: profile.displayName,
+        });
+
         return done(null, user);
       } catch (err) {
         return done(err as Error);
