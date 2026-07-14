@@ -13,12 +13,15 @@ passport.use(
         },
         async (accessToken, refreshToken, profile, done) => {
             try {
-                const user = await authService.findOrCreateAccount({
-                    provider: "google",
-                    providerUserId: profile.id,
-                    email: profile.emails![0].value,
-                    name: profile.displayName,
-                });
+               const user = await authService.findOrCreateAccount({
+    provider: "google",
+    providerUserId: profile.id,
+    email: profile.emails![0].value,
+    name: profile.displayName,
+
+    accessToken,
+    refreshToken: refreshToken ?? undefined,
+});
 
                 const token = jwtService.generateToken({
                     userId: user.id,

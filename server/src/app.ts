@@ -5,6 +5,7 @@ import morgan from "morgan";
 import session from "express-session";
 import passport from "./auth/passport.js";
 import authRoutes from "./auth/auth.routes.js";
+import driveRoutes from "./routes/drive.routes";
 
 const app = express();
 
@@ -13,6 +14,7 @@ app.use(express.json());
 app.use(cors());
 app.use(helmet());
 app.use(morgan("dev"));
+app.use("/drive", driveRoutes);
 
 // Session middleware
 app.use(
