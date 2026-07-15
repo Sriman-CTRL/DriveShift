@@ -13,6 +13,9 @@ export interface FindOrCreateAccountInput {
 
 class AuthService {
    async findOrCreateAccount(data: FindOrCreateAccountInput) {
+    console.log("===== AUTH SERVICE =====");
+console.log("Access Token:", data.accessToken);
+console.log("Refresh Token:", data.refreshToken);
 
     const existingAccount = await prisma.connectedAccount.findUnique({
         where: {

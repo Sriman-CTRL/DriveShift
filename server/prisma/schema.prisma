@@ -25,6 +25,7 @@ model ConnectedAccount {
   accessToken    String?
   refreshToken   String?
   tokenExpiry    DateTime?
+  createdAt      DateTime @default(now())
 
   userId         String
 

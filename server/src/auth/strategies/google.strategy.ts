@@ -13,15 +13,14 @@ passport.use(
         },
         async (accessToken, refreshToken, profile, done) => {
             try {
-               const user = await authService.findOrCreateAccount({
-    provider: "google",
-    providerUserId: profile.id,
-    email: profile.emails![0].value,
-    name: profile.displayName,
-
-    accessToken,
-    refreshToken: refreshToken ?? undefined,
-});
+                const user = await authService.findOrCreateAccount({
+                    provider: "google",
+                    providerUserId: profile.id,
+                    email: profile.emails![0].value,
+                    name: profile.displayName,
+                    accessToken,
+                    refreshToken: refreshToken ?? undefined,
+                });
 
                 const token = jwtService.generateToken({
                     userId: user.id,
@@ -33,6 +32,7 @@ passport.use(
                     token,
                 });
             } catch (error) {
+                console.error("GOOGLE STRATEGY ERROR", error);
                 return done(error as Error);
             }
         }

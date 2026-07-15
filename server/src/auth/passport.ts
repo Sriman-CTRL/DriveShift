@@ -13,6 +13,7 @@ passport.use(
     async (accessToken, refreshToken, profile, done) => {
       try {
         const email = profile.emails?.[0]?.value;
+
         if (!email) {
           return done(new Error("No email found in Google profile"));
         }
@@ -22,10 +23,15 @@ passport.use(
           providerUserId: profile.id,
           email: email,
           name: profile.displayName,
+
+          // Store Google OAuth tokens
+          accessToken: accessToken,
+          refreshToken: refreshToken ?? undefined,
         });
 
         return done(null, user);
       } catch (err) {
+        console.error("Google Strategy Error:", err);
         return done(err as Error);
       }
     }
