@@ -2,6 +2,7 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { env } from "../config/env.js";
 import { authService } from "./auth.service.js";
+import { jwtService } from "../services/jwt.service.js";
 
 passport.use(
   new GoogleStrategy(
@@ -21,15 +22,23 @@ passport.use(
         const user = await authService.findOrCreateAccount({
           provider: "google",
           providerUserId: profile.id,
-          email: email,
+          email,
           name: profile.displayName,
-
-          // Store Google OAuth tokens
-          accessToken: accessToken,
+          accessToken,
           refreshToken: refreshToken ?? undefined,
         });
 
-        return done(null, user);
+        // Generate our own JWT
+        const token = jwtService.generate({
+          userId: user.id,
+          email: user.email,
+        });
+
+        return done(null, {
+          user,
+          token,
+        });
+
       } catch (err) {
         console.error("Google Strategy Error:", err);
         return done(err as Error);
@@ -37,13 +46,5 @@ passport.use(
     }
   )
 );
-
-passport.serializeUser((user: any, done) => {
-  done(null, user);
-});
-
-passport.deserializeUser((user: any, done) => {
-  done(null, user);
-});
 
 export default passport;

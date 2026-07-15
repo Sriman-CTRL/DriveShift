@@ -3,41 +3,39 @@ import passport from "./passport.js";
 
 const router = Router();
 
-// Initiate Google Authentication
+// Google Login
 router.get(
   "/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+  passport.authenticate("google", {
+    scope: [
+      "profile",
+      "email",
+      "https://www.googleapis.com/auth/drive.readonly",
+    ],
+    session: false,
+  })
 );
 
-// Google Authentication Callback
+// Google Callback
 router.get(
   "/google/callback",
-  passport.authenticate("google", { failureRedirect: "/login" }),
+  passport.authenticate("google", {
+    failureRedirect: "/login",
+    session: false,
+  }),
   (req, res) => {
+
+    const auth = req.user as {
+      user: any;
+      token: string;
+    };
+
     res.json({
-      message: "Successfully authenticated with Google",
-      user: req.user,
+      message: "Successfully authenticated",
+      token: auth.token,
+      user: auth.user,
     });
   }
 );
-
-// User Profile
-router.get("/me", (req, res) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ message: "Not authenticated" });
-    return;
-  }
-  res.json(req.user);
-});
-
-// Logout
-router.get("/logout", (req, res, next) => {
-  req.logout((err) => {
-    if (err) {
-      return next(err);
-    }
-    res.json({ message: "Successfully logged out" });
-  });
-});
 
 export default router;

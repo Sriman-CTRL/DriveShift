@@ -22,7 +22,7 @@ passport.use(
                     refreshToken: refreshToken ?? undefined,
                 });
 
-                const token = jwtService.generateToken({
+                const token = jwtService.generate({
                     userId: user.id,
                     email: user.email,
                 });
