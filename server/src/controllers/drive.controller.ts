@@ -7,34 +7,33 @@ class DriveController {
 
     async listFiles(req: AuthRequest, res: Response) {
 
-        const account =
-            await prisma.connectedAccount.findFirst({
+        const account = await prisma.connectedAccount.findFirst({
+            where: {
+                userId: req.user!.userId,
+                provider: "google",
+            },
+        });
 
-                where: {
-                    userId: req.user!.userId,
-                    provider: "google",
-                },
-
-            });
-
-        if (!account?.accessToken) {
-
-            return res.status(400).json({
+        if (!account) {
+            return res.status(404).json({
                 message: "Google account not connected",
             });
-
         }
 
-        const files =
-            await googleDriveService.listFiles(
-                account.accessToken
-            );
+        if (!account.accessToken) {
+            return res.status(400).json({
+                message: "Google access token not found",
+            });
+        }
 
-        return res.json(files);
+        const files = await googleDriveService.listFiles(
+            account.accessToken
+        );
 
+        return res.status(200).json({
+            files,
+        });
     }
-
 }
 
-export const driveController =
-    new DriveController();
+export const driveController = new DriveController();
