@@ -20,6 +20,28 @@ class GoogleDriveService {
 
     }
 
+    async getFile(
+        accessToken: string,
+        fileId: string
+    ) {
+
+        const drive =
+            googleDriveClient.createClient(accessToken);
+
+        const response =
+            await drive.files.get({
+
+                fileId,
+
+                fields:
+                    "id,name,mimeType,size,createdTime,modifiedTime,owners",
+
+            });
+
+        return response.data;
+
+    }
+
 }
 
 export const googleDriveService =
