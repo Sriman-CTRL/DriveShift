@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction, RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 
@@ -10,11 +10,7 @@ export interface AuthRequest extends Request {
     };
 }
 
-export const authMiddleware = (
-    req: AuthRequest,
-    res: Response,
-    next: NextFunction
-) => {
+export const authMiddleware: RequestHandler = (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
@@ -40,7 +36,7 @@ export const authMiddleware = (
             email: string;
         };
 
-        req.user = decoded;
+        (req as AuthRequest).user = decoded;
 
         next();
     } catch {

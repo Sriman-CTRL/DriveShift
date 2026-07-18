@@ -1,12 +1,14 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 
 class AuthController {
-    async me(req: AuthRequest, res: Response) {
+    async me(req: Request, res: Response) {
+        const authReq = req as AuthRequest;
+
         const user = await prisma.user.findUnique({
             where: {
-                id: req.user!.userId,
+                id: authReq.user!.userId,
             },
         });
 

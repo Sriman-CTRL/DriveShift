@@ -2,16 +2,16 @@ import { Router } from "express";
 import passport from "./passport.js";
 
 const router = Router();
+const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 
 // Google Login
 router.get(
   "/google",
   passport.authenticate("google", {
-    scope: [
-      "profile",
-      "email",
-      "https://www.googleapis.com/auth/drive.readonly",
-    ],
+    scope: ["profile", "email", GOOGLE_DRIVE_SCOPE],
+    accessType: "offline",
+    prompt: "consent",
+    includeGrantedScopes: true,
     session: false,
   })
 );

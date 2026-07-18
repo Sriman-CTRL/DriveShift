@@ -3,6 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import session from "express-session";
+import multer from "multer";
 import passport from "./auth/passport.js";
 import authRoutes from "./auth/auth.routes.js";
 import driveRoutes from "./routes/drive.routes";
@@ -37,6 +38,26 @@ app.get("/health", (req, res) => {
     status: "OK",
     message: "Everything is good",
   });
+});
+
+app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    console.error("[upload-debug] Multer error", {
+      code: err.code,
+      field: err.field,
+      message: err.message,
+      contentType: req.headers["content-type"],
+    });
+
+    return res.status(400).json({
+      message: "File upload failed",
+      code: err.code,
+      field: err.field,
+      details: err.message,
+    });
+  }
+
+  next(err);
 });
 
 export default app;
