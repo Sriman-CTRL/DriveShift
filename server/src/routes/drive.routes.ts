@@ -60,5 +60,10 @@ router.post(
     },
     driveController.uploadFile
 );
+router.post(
+    "/migrate/:fileId",
+    authMiddleware,
+    driveController.migrateFile
+);
 
 export default router;

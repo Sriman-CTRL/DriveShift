@@ -1,6 +1,7 @@
 import { Request } from "express";
 import passport from "passport";
 import { Profile, Strategy as GoogleStrategy, VerifyCallback } from "passport-google-oauth20";
+import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { authService } from "./auth.service.js";
 import { jwtService } from "../services/jwt.service.js";
@@ -41,6 +42,19 @@ passport.use(
           return done(new Error("No email found in Google profile"));
         }
 
+        // Handle state token for account linking
+        let userId: string | undefined;
+        const state = req.query.state as string | undefined;
+        if (state) {
+          try {
+            const decoded = jwt.verify(state, env.JWT_SECRET) as { userId: string };
+            userId = decoded.userId;
+            console.debug("[GoogleOAuth] Extracted userId from state for account linking:", userId);
+          } catch (err) {
+            console.warn("[GoogleOAuth] Invalid or expired state token:", err);
+          }
+        }
+
         const user = await authService.findOrCreateAccount({
           provider: "google",
           providerUserId: profile.id,
@@ -49,6 +63,7 @@ passport.use(
           accessToken,
           refreshToken: refreshToken ?? undefined,
           tokenExpiry,
+          userId,
         });
 
         // Generate our own JWT

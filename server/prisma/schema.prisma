@@ -13,7 +13,8 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  accounts  ConnectedAccount[]
+  accounts       ConnectedAccount[]
+  migrationJobs  MigrationJob[]
 }
 
 model ConnectedAccount {
@@ -31,5 +32,40 @@ model ConnectedAccount {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  sourceMigrations MigrationJob[] @relation("SourceAccount")
+  destMigrations   MigrationJob[] @relation("DestAccount")
+
   @@unique([provider, providerUserId])
+}
+
+enum MigrationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+model MigrationJob {
+  id                  String          @id @default(cuid())
+
+  userId              String
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sourceAccountId     String
+  sourceAccount       ConnectedAccount @relation("SourceAccount", fields: [sourceAccountId], references: [id])
+
+  destAccountId       String
+  destAccount         ConnectedAccount @relation("DestAccount", fields: [destAccountId], references: [id])
+
+  sourceFileId        String
+  sourceFileName      String?
+  sourceFileMimeType  String?
+
+  destFileId          String?         // set after successful upload
+
+  status              MigrationStatus @default(PENDING)
+  errorMessage        String?
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
 }

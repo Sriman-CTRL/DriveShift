@@ -5,8 +5,9 @@ import morgan from "morgan";
 import session from "express-session";
 import multer from "multer";
 import passport from "./auth/passport.js";
-import authRoutes from "./auth/auth.routes.js";
-import driveRoutes from "./routes/drive.routes";
+import authRoutes from "./routes/auth.routes.js";
+import driveRoutes from "./routes/drive.routes.js";
+import migrationRoutes from "./routes/migration.routes.js";
 
 const app = express();
 
@@ -16,6 +17,7 @@ app.use(cors());
 app.use(helmet());
 app.use(morgan("dev"));
 app.use("/drive", driveRoutes);
+app.use("/migrations", migrationRoutes);
 
 // Session middleware
 app.use(
