@@ -57,11 +57,22 @@ model MigrationJob {
   destAccountId       String
   destAccount         ConnectedAccount @relation("DestAccount", fields: [destAccountId], references: [id])
 
-  sourceFileId        String
+  sourceFileId        String?
+  sourceFolderId      String?
+
   sourceFileName      String?
   sourceFileMimeType  String?
 
   destFileId          String?         // set after successful upload
+  destFolderId        String?         // set after successful folder migration
+
+  totalFiles       Int @default(0)
+  completedFiles   Int @default(0)
+
+  totalFolders     Int @default(0)
+  completedFolders Int @default(0)
+
+  progress         Int @default(0)
 
   status              MigrationStatus @default(PENDING)
   errorMessage        String?

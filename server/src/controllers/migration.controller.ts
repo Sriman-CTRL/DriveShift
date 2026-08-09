@@ -15,11 +15,15 @@ class MigrationController {
                 });
             }
 
-            const { sourceAccountId, destAccountId, sourceFileId } = req.body;
+            const {
+                sourceAccountId,
+                destAccountId,
+                sourceFolderId,
+            } = req.body;
 
-            if (!sourceAccountId || !destAccountId || !sourceFileId) {
+            if (!sourceAccountId || !destAccountId || !sourceFolderId) {
                 return res.status(400).json({
-                    message: "sourceAccountId, destAccountId, and sourceFileId are required",
+                    message: "sourceAccountId, destAccountId, and sourceFolderId are required",
                 });
             }
 
@@ -42,7 +46,7 @@ class MigrationController {
                 userId,
                 sourceAccountId,
                 destAccountId,
-                sourceFileId,
+                sourceFolderId,
             });
 
             // Execute the migration asynchronously in the background

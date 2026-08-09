@@ -4,7 +4,7 @@ import { authController } from "../controllers/auth.controller";
 import { authMiddleware } from "../middleware/auth.middleware";
 
 const router = Router();
-const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+const GOOGLE_DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
 
 // Google Login
 router.get(

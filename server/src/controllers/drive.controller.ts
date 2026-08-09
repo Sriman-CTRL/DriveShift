@@ -232,8 +232,8 @@ class DriveController {
             typeof req.body?.accountId === "string"
                 ? req.body.accountId
                 : typeof req.query.accountId === "string"
-                ? req.query.accountId
-                : null;
+                    ? req.query.accountId
+                    : null;
 
         const account = await this.getGoogleAccount(authReq.user!.userId, accountId);
 
@@ -258,6 +258,57 @@ class DriveController {
             message: "File uploaded successfully",
             file: uploadedFile,
         });
+    }
+    async migrateFolder(req: Request, res: Response) {
+        try {
+            const authReq = req as AuthRequest;
+            const folderId = Array.isArray(req.params.folderId)
+                ? req.params.folderId[0]
+                : req.params.folderId;
+
+            if (!folderId) {
+                return res.status(400).json({
+                    message: "Folder ID is required",
+                });
+            }
+
+            console.log(`[controller:migrateFolder] Start — folderId: ${folderId}, userId: ${authReq.user?.userId}`);
+
+            const account = await prisma.connectedAccount.findFirst({
+                where: {
+                    userId: authReq.user!.userId,
+                    provider: "google",
+                },
+            });
+
+            if (!account) {
+                return res.status(404).json({
+                    message: "Google account not connected",
+                });
+            }
+
+            const accountCtx = {
+                accessToken: account.accessToken,
+                refreshToken: account.refreshToken,
+                tokenExpiry: account.tokenExpiry,
+                userId: account.userId,
+                providerUserId: account.providerUserId,
+            };
+
+            const result = await googleDriveService.migrateFolder(
+                accountCtx,
+                accountCtx,
+                folderId
+            );
+
+            console.log(`[controller:migrateFolder] ✅ Done — dest folder id: ${result.id}`);
+            return res.json(result);
+        } catch (error) {
+            console.error("[controller:migrateFolder] ❌ Error:", error);
+            return res.status(500).json({
+                message: error instanceof Error ? error.message : "Folder migration failed",
+            });
+        }
     }
 }
 

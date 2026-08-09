@@ -45,7 +45,8 @@ class GoogleDriveService {
         account: GoogleAccountContext,
         stream: Readable,
         fileName: string,
-        mimeType: string
+        mimeType: string,
+        parentFolderId?: string
     ) {
         const { drive, accessToken, tokenExpiry } =
             await googleDriveClient.createClient(
@@ -63,6 +64,7 @@ class GoogleDriveService {
         const response = await drive.files.create({
             requestBody: {
                 name: fileName,
+                parents: parentFolderId ? [parentFolderId] : undefined,
             },
             media: {
                 mimeType,
@@ -104,6 +106,7 @@ class GoogleDriveService {
 
         const response = await drive.files.list({
             pageSize: 20,
+            q: "trashed = false",
             fields: "files(id,name,mimeType,size)",
         });
 
@@ -138,7 +141,8 @@ class GoogleDriveService {
 
     async downloadFile(
         account: GoogleAccountContext,
-        fileId: string
+        fileId: string,
+        existingMetadata?: { name: string; mimeType: string }
     ) {
         const { drive, accessToken, tokenExpiry } =
             await googleDriveClient.createClient(
@@ -153,14 +157,22 @@ class GoogleDriveService {
             tokenExpiry
         );
 
-        // Get metadata to determine file type
-        const metadata = await drive.files.get({
-            fileId,
-            fields: "name,mimeType",
-        });
+        let originalMimeType: string;
+        let name: string;
 
-        const originalMimeType = metadata.data.mimeType!;
-        let name = metadata.data.name!;
+        // Skip metadata API call if metadata is already passed in
+        if (existingMetadata) {
+            originalMimeType = existingMetadata.mimeType;
+            name = existingMetadata.name;
+        } else {
+            const metadata = await drive.files.get({
+                fileId,
+                fields: "name,mimeType",
+            });
+            originalMimeType = metadata.data.mimeType!;
+            name = metadata.data.name!;
+        }
+
         let stream: any;
         let mimeType = originalMimeType;
 
@@ -229,22 +241,142 @@ class GoogleDriveService {
             mimeType,
         };
     }
+    async migrateFileFromMetadata(
+        sourceAccount: GoogleAccountContext,
+        destAccount: GoogleAccountContext,
+        file: {
+            id: string;
+            name: string;
+            mimeType: string;
+        },
+        destParentFolderId?: string
+    ) {
+        console.log(`[migrate:file] Downloading "${file.name}" (${file.id}) | mimeType: ${file.mimeType}`);
+
+        const downloaded = await this.downloadFile(
+            sourceAccount,
+            file.id,
+            file
+        );
+
+        console.log(`[migrate:file] Uploading "${downloaded.name}" → dest folder: ${destParentFolderId ?? "(root)"}`);
+
+        const result = await this.uploadStream(
+            destAccount,
+            downloaded.stream,
+            downloaded.name,
+            downloaded.mimeType,
+            destParentFolderId
+        );
+
+        console.log(`[migrate:file] ✅ Uploaded "${downloaded.name}" → id: ${result.id}`);
+        return result;
+    }
+
     async migrateFile(
         sourceAccount: GoogleAccountContext,
         destAccount: GoogleAccountContext,
         fileId: string
     ) {
-        const downloaded = await this.downloadFile(
-            sourceAccount,
-            fileId
+        const fileMetadata = await this.getFile(sourceAccount, fileId);
+
+        return this.migrateFileFromMetadata(sourceAccount, destAccount, {
+            id: fileId,
+            name: fileMetadata.name!,
+            mimeType: fileMetadata.mimeType!,
+        });
+    }
+    async migrateFolder(
+        sourceAccount: GoogleAccountContext,
+        destAccount: GoogleAccountContext,
+        sourceFolderId: string,
+        destinationParentFolderId?: string,
+        onProgress?: (progress: {
+            files: number;
+            folders: number;
+        }) => Promise<void>,
+        progress = {
+            files: 0,
+            folders: 0,
+        }
+    ) {
+        console.log(
+            `[migrate:folder] Fetching source folder metadata: ${sourceFolderId}`
         );
 
-        return this.uploadStream(
-            destAccount,
-            downloaded.stream,
-            downloaded.name,
-            downloaded.mimeType
+        const sourceFolder = await this.getFile(
+            sourceAccount,
+            sourceFolderId
         );
+
+        if (
+            sourceFolder.mimeType !==
+            "application/vnd.google-apps.folder"
+        ) {
+            throw new Error(
+                `The provided ID "${sourceFolderId}" is not a folder.`
+            );
+        }
+
+        const destinationFolder = await this.createFolder(
+            destAccount,
+            sourceFolder.name!,
+            destinationParentFolderId
+        );
+
+        progress.folders++;
+
+        if (onProgress) {
+            await onProgress({ ...progress });
+        }
+
+        console.log(
+            `[migrate:folder] Created "${destinationFolder.name}"`
+        );
+
+        const children = await this.listChildren(
+            sourceAccount,
+            sourceFolderId
+        );
+
+        for (const child of children) {
+            if (
+                child.mimeType ===
+                "application/vnd.google-apps.folder"
+            ) {
+                await this.migrateFolder(
+                    sourceAccount,
+                    destAccount,
+                    child.id!,
+                    destinationFolder.id!,
+                    onProgress,
+                    progress
+                );
+            } else {
+                await this.migrateFileFromMetadata(
+                    sourceAccount,
+                    destAccount,
+                    {
+                        id: child.id!,
+                        name: child.name!,
+                        mimeType: child.mimeType!,
+                    },
+                    destinationFolder.id!
+                );
+
+                progress.files++;
+
+                if (onProgress) {
+                    await onProgress({ ...progress });
+                }
+            }
+        }
+
+        console.log(
+            `[migrate:folder] ✅ Completed "${sourceFolder.name}"`
+        );
+
+        return destinationFolder;
     }
     async deleteFile(
         account: GoogleAccountContext,
@@ -267,8 +399,67 @@ class GoogleDriveService {
             fileId,
         });
     }
+    async listChildren(
+        account: GoogleAccountContext,
+        folderId: string
+    ) {
+        console.log(`[listChildren] Querying children of folder: ${folderId}`);
+
+        const { drive, accessToken, tokenExpiry } =
+            await googleDriveClient.createClient(
+                account.accessToken,
+                account.refreshToken,
+                account.tokenExpiry
+            );
+
+        await this.persistAccessToken(
+            account,
+            accessToken,
+            tokenExpiry
+        );
+
+        const response = await drive.files.list({
+            q: `'${folderId}' in parents and trashed = false`,
+            fields:
+                "files(id,name,mimeType,size,parents)",
+            orderBy: "folder,name",
+        });
+
+        const files = response.data.files ?? [];
+        console.log(`[listChildren] Got ${files.length} items for folder ${folderId}`);
+        return files;
+    }
 
 
+    async createFolder(
+        account: GoogleAccountContext,
+        folderName: string,
+        parentFolderId?: string
+    ) {
+        const { drive, accessToken, tokenExpiry } =
+            await googleDriveClient.createClient(
+                account.accessToken,
+                account.refreshToken,
+                account.tokenExpiry
+            );
+
+        await this.persistAccessToken(
+            account,
+            accessToken,
+            tokenExpiry
+        );
+
+        const response = await drive.files.create({
+            requestBody: {
+                name: folderName,
+                mimeType: "application/vnd.google-apps.folder",
+                parents: parentFolderId ? [parentFolderId] : undefined,
+            },
+            fields: "id,name",
+        });
+
+        return response.data;
+    }
 
 }
 

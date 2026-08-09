@@ -10,7 +10,14 @@ passport.use(
             clientID: env.GOOGLE_CLIENT_ID,
             clientSecret: env.GOOGLE_CLIENT_SECRET,
             callbackURL: env.GOOGLE_CALLBACK_URL,
+
+            scope: [
+                "profile",
+                "email",
+                "https://www.googleapis.com/auth/drive",
+            ],
         },
+
         async (accessToken, refreshToken, profile, done) => {
             try {
                 const user = await authService.findOrCreateAccount({
