@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { migrationService } from "../services/migration.service";
+import { migrationQueue } from "../migration/queue";
 
 class MigrationController {
     async createMigrationJob(req: Request, res: Response) {
@@ -50,8 +51,8 @@ class MigrationController {
             });
 
             // Execute the migration asynchronously in the background
-            migrationService.executeMigration(job.id).catch((err) => {
-                console.error(`[BackgroundMigration] Job ${job.id} failed:`, err);
+            await migrationQueue.add("migration", {
+                jobId: job.id,
             });
 
             return res.status(202).json({

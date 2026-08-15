@@ -154,7 +154,7 @@ class MigrationService {
                 let completedFiles = 0;
                 let completedFolders = 0;
 
-                const destinationFolder =
+                const migrationResult =
                     await googleDriveService.migrateFolder(
                         sourceContext,
                         destContext,
@@ -195,6 +195,46 @@ class MigrationService {
                         }
                     );
 
+                const { failedFiles } = migrationResult;
+                const destFolderId = migrationResult.id ?? undefined;
+
+                if (failedFiles.length > 0) {
+                    // Partial failure — some files could not be migrated.
+                    // We still record the destination folder and how far we got.
+                    const summary = failedFiles
+                        .map(
+                            (f) =>
+                                `"${f.name}" (${f.mimeType}): ${f.error}`
+                        )
+                        .join("; ");
+
+                    await prisma.migrationJob.update({
+                        where: { id: jobId },
+                        data: {
+                            status: "FAILED",
+                            errorMessage: `${failedFiles.length} file(s) could not be migrated: ${summary}`,
+                            completedFiles,
+                            completedFolders,
+                            progress: Math.floor(
+                                ((completedFiles + completedFolders) /
+                                    (totals.files + totals.folders)) *
+                                100
+                            ),
+                            destFolderId,
+                            sourceFileName: migrationResult.name ?? undefined,
+                        },
+                    });
+
+                    return {
+                        id: job.id,
+                        status: "FAILED",
+                        failedFiles,
+                        completedFiles,
+                        completedFolders,
+                        destFolderId,
+                    };
+                }
+
                 await prisma.migrationJob.update({
                     where: { id: jobId },
                     data: {
@@ -208,11 +248,9 @@ class MigrationService {
 
                         progress: 100,
 
-                        destFolderId:
-                            destinationFolder.id,
+                        destFolderId,
 
-                        sourceFileName:
-                            destinationFolder.name,
+                        sourceFileName: migrationResult.name ?? undefined,
                     },
                 });
 
@@ -227,13 +265,12 @@ class MigrationService {
                     totalFolders: totals.folders,
                     completedFolders: totals.folders,
 
-                    destFolderId:
-                        destinationFolder.id,
+                    destFolderId,
 
-                    sourceFolderName:
-                        destinationFolder.name,
+                    sourceFolderName: migrationResult.name,
                 };
             }
+
 
             /*
              * SINGLE FILE MIGRATION
