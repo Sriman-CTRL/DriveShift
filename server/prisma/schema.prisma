@@ -1,6 +1,7 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -13,22 +14,22 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  accounts       ConnectedAccount[]
-  migrationJobs  MigrationJob[]
+  accounts      ConnectedAccount[]
+  migrationJobs MigrationJob[]
 }
 
 model ConnectedAccount {
-  id             String   @id @default(cuid())
+  id String @id @default(cuid())
 
   provider       String
   providerUserId String
 
-  accessToken    String?
-  refreshToken   String?
-  tokenExpiry    DateTime?
-  createdAt      DateTime @default(now())
+  accessToken  String?
+  refreshToken String?
+  tokenExpiry  DateTime?
+  createdAt    DateTime  @default(now())
 
-  userId         String
+  userId String
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -43,40 +44,74 @@ enum MigrationStatus {
   IN_PROGRESS
   COMPLETED
   FAILED
+  CANCELLED
 }
 
 model MigrationJob {
-  id                  String          @id @default(cuid())
+  id String @id @default(cuid())
 
-  userId              String
-  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  sourceAccountId     String
-  sourceAccount       ConnectedAccount @relation("SourceAccount", fields: [sourceAccountId], references: [id])
+  sourceAccountId String
+  sourceAccount   ConnectedAccount @relation("SourceAccount", fields: [sourceAccountId], references: [id])
 
-  destAccountId       String
-  destAccount         ConnectedAccount @relation("DestAccount", fields: [destAccountId], references: [id])
+  destAccountId String
+  destAccount   ConnectedAccount @relation("DestAccount", fields: [destAccountId], references: [id])
 
-  sourceFileId        String?
-  sourceFolderId      String?
+  sourceFileId   String?
+  sourceFolderId String?
 
-  sourceFileName      String?
-  sourceFileMimeType  String?
+  sourceFileName     String?
+  sourceFileMimeType String?
 
-  destFileId          String?         // set after successful upload
-  destFolderId        String?         // set after successful folder migration
+  destFileId   String? // set after successful upload
+  destFolderId String? // set after successful folder migration
 
-  totalFiles       Int @default(0)
-  completedFiles   Int @default(0)
+  totalFiles     Int @default(0)
+  completedFiles Int @default(0)
 
   totalFolders     Int @default(0)
   completedFolders Int @default(0)
 
-  progress         Int @default(0)
+  progress Int @default(0)
 
-  status              MigrationStatus @default(PENDING)
-  errorMessage        String?
+  status       MigrationStatus @default(PENDING)
+  errorMessage String?
 
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items MigrationItem[]
+}
+
+enum MigrationItemStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  SKIPPED
+}
+
+model MigrationItem {
+  id String @id @default(cuid())
+
+  migrationJobId String
+  migrationJob   MigrationJob @relation(fields: [migrationJobId], references: [id], onDelete: Cascade)
+
+  sourceFileId   String
+  sourceFileName String?
+  sourceMimeType String?
+
+  destFileId   String?
+  destFolderId String?
+
+  status       MigrationItemStatus @default(PENDING)
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([migrationJobId, sourceFileId])
+  @@index([migrationJobId])
 }

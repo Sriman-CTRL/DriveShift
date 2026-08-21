@@ -10,6 +10,19 @@ export type GoogleAccountContext = {
     providerUserId: string;
 };
 
+/**
+ * Callback payload reported by migrateFolder() after every file attempt.
+ * MigrationService consumes this to write MigrationItem records.
+ */
+export type FileResult = {
+    sourceFileId: string;
+    sourceFileName: string;
+    sourceMimeType: string;
+    destFileId?: string | null;
+    status: "COMPLETED" | "FAILED";
+    errorMessage?: string;
+};
+
 class GoogleDriveService {
     private async persistAccessToken(
         account: GoogleAccountContext,
@@ -322,6 +335,7 @@ class GoogleDriveService {
 
         return { stream, name, mimeType };
     }
+
     async migrateFileFromMetadata(
         sourceAccount: GoogleAccountContext,
         destAccount: GoogleAccountContext,
@@ -446,6 +460,17 @@ class GoogleDriveService {
             mimeType: fileMetadata.mimeType!,
         });
     }
+
+    /**
+     * Recursively migrate a Google Drive folder (and all its contents) to a destination account.
+     *
+     * @param onProgress   - Fires after every file or folder is processed (for progress bar).
+     * @param onFileStart  - Fires BEFORE each file migration.
+     *                       Returns `true` if the file should be skipped (already COMPLETED).
+     * @param onFileResult - Fires AFTER each file migration attempt with success/failure info.
+     * @param progress     - Shared mutable counter passed through recursive calls.
+     * @param failedFiles  - Shared accumulator for per-file errors across the recursive tree.
+     */
     async migrateFolder(
         sourceAccount: GoogleAccountContext,
         destAccount: GoogleAccountContext,
@@ -455,6 +480,12 @@ class GoogleDriveService {
             files: number;
             folders: number;
         }) => Promise<void>,
+        onFileStart?: (file: {
+            sourceFileId: string;
+            sourceFileName: string;
+            sourceMimeType: string;
+        }) => Promise<boolean>,
+        onFileResult?: (result: FileResult) => Promise<void>,
         progress = {
             files: 0,
             folders: 0,
@@ -475,7 +506,7 @@ class GoogleDriveService {
             sourceFolderId
         );
 
-        // Resolve shortcuts
+        // Resolve shortcuts at the folder level
         if (
             sourceFolder.mimeType ===
             "application/vnd.google-apps.shortcut"
@@ -507,6 +538,25 @@ class GoogleDriveService {
                 `[migrate:folder] "${sourceFolderId}" is a file. Migrating as file.`
             );
 
+            const fileInfo = {
+                sourceFileId: sourceFolderId,
+                sourceFileName: sourceFolder.name ?? sourceFolderId,
+                sourceMimeType: sourceFolder.mimeType ?? "unknown",
+            };
+
+            // Check idempotency — skip if already COMPLETED in a previous run.
+            if (onFileStart) {
+                const shouldSkip = await onFileStart(fileInfo);
+                if (shouldSkip) {
+                    console.log(
+                        `[migrate:folder] Skipping already-completed file "${fileInfo.sourceFileName}"`
+                    );
+                    progress.files++;
+                    if (onProgress) await onProgress({ ...progress });
+                    return { id: null, name: sourceFolder.name, failedFiles };
+                }
+            }
+
             try {
                 const uploaded = await this.migrateFileFromMetadata(
                     sourceAccount,
@@ -518,6 +568,14 @@ class GoogleDriveService {
                     },
                     destinationParentFolderId
                 );
+
+                if (onFileResult) {
+                    await onFileResult({
+                        ...fileInfo,
+                        destFileId: uploaded.id,
+                        status: "COMPLETED",
+                    });
+                }
 
                 progress.files++;
                 if (onProgress) await onProgress({ ...progress });
@@ -532,6 +590,15 @@ class GoogleDriveService {
                     mimeType: sourceFolder.mimeType ?? "unknown",
                     error: msg,
                 });
+
+                if (onFileResult) {
+                    await onFileResult({
+                        ...fileInfo,
+                        status: "FAILED",
+                        errorMessage: msg,
+                    });
+                }
+
                 // Still count as attempted so progress reflects it.
                 progress.files++;
                 if (onProgress) await onProgress({ ...progress });
@@ -568,13 +635,16 @@ class GoogleDriveService {
                 child.mimeType ===
                 "application/vnd.google-apps.folder"
             ) {
-                // Recurse into nested folder, sharing the same failedFiles array.
+                // Recurse into nested folder, sharing the same failedFiles array
+                // and passing the callbacks through.
                 await this.migrateFolder(
                     sourceAccount,
                     destAccount,
                     child.id!,
                     destinationFolder.id!,
                     onProgress,
+                    onFileStart,
+                    onFileResult,
                     progress,
                     failedFiles
                 );
@@ -585,8 +655,27 @@ class GoogleDriveService {
 
             } else {
 
+                const fileInfo = {
+                    sourceFileId: child.id!,
+                    sourceFileName: child.name ?? child.id ?? "unknown",
+                    sourceMimeType: child.mimeType ?? "unknown",
+                };
+
+                // Check idempotency — skip if already COMPLETED in a previous run.
+                if (onFileStart) {
+                    const shouldSkip = await onFileStart(fileInfo);
+                    if (shouldSkip) {
+                        console.log(
+                            `[migrate:folder] Skipping already-completed file "${fileInfo.sourceFileName}"`
+                        );
+                        progress.files++;
+                        if (onProgress) await onProgress({ ...progress });
+                        continue;
+                    }
+                }
+
                 try {
-                    await this.migrateFileFromMetadata(
+                    const uploaded = await this.migrateFileFromMetadata(
                         sourceAccount,
                         destAccount,
                         {
@@ -596,6 +685,14 @@ class GoogleDriveService {
                         },
                         destinationFolder.id!
                     );
+
+                    if (onFileResult) {
+                        await onFileResult({
+                            ...fileInfo,
+                            destFileId: uploaded.id,
+                            status: "COMPLETED",
+                        });
+                    }
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
                     console.error(
@@ -608,10 +705,18 @@ class GoogleDriveService {
                         mimeType: child.mimeType ?? "unknown",
                         error: msg,
                     });
+
+                    if (onFileResult) {
+                        await onFileResult({
+                            ...fileInfo,
+                            status: "FAILED",
+                            errorMessage: msg,
+                        });
+                    }
                 }
 
-                // Count the file as processed (whether it succeeded or failed)
-                // so progress keeps advancing.
+                // Count the file as processed (success, failure, or skip) so
+                // the progress bar advances correctly.
                 progress.files++;
                 if (onProgress) await onProgress({ ...progress });
             }
@@ -628,6 +733,7 @@ class GoogleDriveService {
 
         return { id: destinationFolder.id, name: destinationFolder.name, failedFiles };
     }
+
     async deleteFile(
         account: GoogleAccountContext,
         fileId: string
@@ -649,6 +755,7 @@ class GoogleDriveService {
             fileId,
         });
     }
+
     async listChildren(
         account: GoogleAccountContext,
         folderId: string

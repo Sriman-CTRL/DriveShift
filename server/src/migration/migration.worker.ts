@@ -1,14 +1,13 @@
 import { Worker } from "bullmq";
 import IORedis from "ioredis";
-import { migrationService } from "../services/migration.service";
+import { migrationService, MigrationCancelledError } from "../services/migration.service";
 import prisma from "../config/prisma";
+import { env } from "../config/env.js";
 
-const connection = new IORedis(
-    process.env.REDIS_URL || "redis://localhost:6379",
-    {
-        maxRetriesPerRequest: null,
-    }
-);
+const connection = new IORedis(env.REDIS_URL, {
+    maxRetriesPerRequest: null,
+});
+
 
 export const migrationWorker = new Worker(
     "migration",
@@ -39,6 +38,18 @@ migrationWorker.on("completed", (job) => {
 
 migrationWorker.on("failed", async (job, error) => {
     if (!job) return;
+
+    // ── Cooperative cancellation guard ───────────────────────────────────────
+    // If the job was cancelled by the user, executeMigration() throws a
+    // MigrationCancelledError. The Postgres record is already marked CANCELLED
+    // by cancelMigrationJob() — do NOT overwrite it with FAILED.
+    if (error instanceof MigrationCancelledError) {
+        console.log(
+            `[MigrationWorker] Job ${job.id} stopped cleanly (migration ` +
+            `${job.data.jobId} was cancelled by user). Status preserved as CANCELLED.`
+        );
+        return;
+    }
 
     const attempt = job.attemptsMade;
     const maxAttempts = job.opts.attempts ?? 1;

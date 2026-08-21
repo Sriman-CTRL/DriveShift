@@ -14,4 +14,8 @@ export const env = {
     GOOGLE_CALLBACK_URL: process.env.GOOGLE_CALLBACK_URL!,
 
     JWT_SECRET: process.env.JWT_SECRET!,
+
+    REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
+
+    SESSION_SECRET: process.env.SESSION_SECRET || "temp-secret",
 };

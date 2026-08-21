@@ -96,6 +96,9 @@ class MigrationController {
                     destAccount: {
                         select: { id: true, provider: true, providerUserId: true },
                     },
+                    items: {
+                        orderBy: { createdAt: "asc" },
+                    },
                 },
             });
 
@@ -146,6 +149,53 @@ class MigrationController {
             });
         }
     }
+
+    async cancelMigrationJob(req: Request, res: Response) {
+        try {
+            const authReq = req as AuthRequest;
+            const userId = authReq.user?.userId;
+            const jobId = Array.isArray(req.params.jobId)
+                ? req.params.jobId[0]
+                : req.params.jobId;
+
+            if (!userId) {
+                return res.status(401).json({
+                    message: "Unauthorized",
+                });
+            }
+
+            if (!jobId) {
+                return res.status(400).json({
+                    message: "Job ID is required",
+                });
+            }
+
+            const result = await migrationService.cancelMigrationJob(jobId, userId);
+
+            if ("notFound" in result) {
+                return res.status(404).json({
+                    message: "Migration job not found",
+                });
+            }
+
+            if ("invalidState" in result) {
+                return res.status(400).json({
+                    message: `Cannot cancel a migration that is already ${result.status}`,
+                });
+            }
+
+            return res.status(200).json({
+                message: "Migration cancelled successfully",
+                job: result.job,
+            });
+        } catch (error) {
+            console.error("[MigrationController] cancelMigrationJob error:", error);
+            return res.status(500).json({
+                message: "Failed to cancel migration job",
+            });
+        }
+    }
 }
 
 export const migrationController = new MigrationController();
+

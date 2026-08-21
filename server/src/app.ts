@@ -8,32 +8,33 @@ import passport from "./auth/passport.js";
 import authRoutes from "./routes/auth.routes.js";
 import driveRoutes from "./routes/drive.routes.js";
 import migrationRoutes from "./routes/migration.routes.js";
+import { env } from "./config/env.js";
 
 const app = express();
 
-// Middleware
+// Core middleware
 app.use(express.json());
 app.use(cors());
 app.use(helmet());
 app.use(morgan("dev"));
-app.use("/drive", driveRoutes);
-app.use("/migrations", migrationRoutes);
 
-// Session middleware
+// Session middleware — must come before routes so req.session is available
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "temp-secret",
+    secret: env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
   })
 );
 
-// Passport middleware
+// Passport middleware — must come after session
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Routes
+// Routes — registered after all middleware is set up
 app.use("/auth", authRoutes);
+app.use("/drive", driveRoutes);
+app.use("/migrations", migrationRoutes);
 
 app.get("/health", (req, res) => {
   res.status(200).json({
