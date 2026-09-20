@@ -50,4 +50,11 @@ router.get(
     authController.me
 );
 
+// Connected accounts for the authenticated user
+router.get(
+    "/accounts",
+    authMiddleware,
+    authController.accounts
+);
+
 export default router;

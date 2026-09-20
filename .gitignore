@@ -13,3 +13,6 @@ dist/
 
 # Logs
 *.log
+
+# Redis dump
+dump.rdb

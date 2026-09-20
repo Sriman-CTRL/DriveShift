@@ -2,11 +2,9 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { AuthRequest } from "../middleware/auth.middleware";
 import { googleDriveService } from "../providers/google/drive.service";
-import { migrationService } from "../services/migration.service";
 
 class DriveController {
     constructor() {
-        this.migrateFile = this.migrateFile.bind(this);
         this.listFiles = this.listFiles.bind(this);
         this.getFile = this.getFile.bind(this);
         this.downloadFile = this.downloadFile.bind(this);
@@ -41,72 +39,6 @@ class DriveController {
                 provider: "google",
             },
         });
-    }
-
-    async migrateFile(req: Request, res: Response) {
-        try {
-            const authReq = req as AuthRequest;
-            const userId = authReq.user?.userId;
-
-            if (!userId) {
-                return res.status(401).json({
-                    message: "Unauthorized",
-                });
-            }
-
-            const sourceAccount = await this.getGoogleAccount(userId);
-
-            if (!sourceAccount) {
-                return res.status(404).json({
-                    message: "Google account not connected",
-                });
-            }
-
-            const fileId = this.getFileId(req);
-            const destAccountId =
-                typeof req.body?.destAccountId === "string"
-                    ? req.body.destAccountId
-                    : null;
-
-            let destAccount = sourceAccount;
-
-            if (destAccountId) {
-                destAccount = (await prisma.connectedAccount.findFirst({
-                    where: {
-                        id: destAccountId,
-                        userId,
-                        provider: "google",
-                    },
-                })) ?? sourceAccount;
-
-                if (!destAccount) {
-                    return res.status(404).json({
-                        message: "Destination Google account not found",
-                    });
-                }
-            }
-
-            const job = await migrationService.createMigrationJob({
-                userId,
-                sourceAccountId: sourceAccount.id,
-                destAccountId: destAccount.id,
-                sourceFileId: fileId,
-            });
-
-            // Synchronous migration execution
-            const result = await migrationService.executeMigration(job.id);
-
-            return res.status(200).json({
-                message: "File migrated successfully",
-                job: result,
-            });
-        } catch (error) {
-            console.error(error);
-
-            return res.status(500).json({
-                message: "Migration failed",
-            });
-        }
     }
 
     async listFiles(req: Request, res: Response) {
@@ -258,57 +190,6 @@ class DriveController {
             message: "File uploaded successfully",
             file: uploadedFile,
         });
-    }
-    async migrateFolder(req: Request, res: Response) {
-        try {
-            const authReq = req as AuthRequest;
-            const folderId = Array.isArray(req.params.folderId)
-                ? req.params.folderId[0]
-                : req.params.folderId;
-
-            if (!folderId) {
-                return res.status(400).json({
-                    message: "Folder ID is required",
-                });
-            }
-
-            console.log(`[controller:migrateFolder] Start — folderId: ${folderId}, userId: ${authReq.user?.userId}`);
-
-            const account = await prisma.connectedAccount.findFirst({
-                where: {
-                    userId: authReq.user!.userId,
-                    provider: "google",
-                },
-            });
-
-            if (!account) {
-                return res.status(404).json({
-                    message: "Google account not connected",
-                });
-            }
-
-            const accountCtx = {
-                accessToken: account.accessToken,
-                refreshToken: account.refreshToken,
-                tokenExpiry: account.tokenExpiry,
-                userId: account.userId,
-                providerUserId: account.providerUserId,
-            };
-
-            const result = await googleDriveService.migrateFolder(
-                accountCtx,
-                accountCtx,
-                folderId
-            );
-
-            console.log(`[controller:migrateFolder] ✅ Done — dest folder id: ${result.id}`);
-            return res.json(result);
-        } catch (error) {
-            console.error("[controller:migrateFolder] ❌ Error:", error);
-            return res.status(500).json({
-                message: error instanceof Error ? error.message : "Folder migration failed",
-            });
-        }
     }
 }
 

@@ -1,10 +1,5 @@
 import prisma from "../config/prisma";
 
-const maskToken = (value?: string | null) => {
-    if (!value) return "none";
-    return `${value.slice(0, 6)}...${value.slice(-4)} (len=${value.length})`;
-};
-
 export interface FindOrCreateAccountInput {
     provider: string;
     providerUserId: string;
@@ -19,15 +14,7 @@ export interface FindOrCreateAccountInput {
 }
 
 class AuthService {
-   async findOrCreateAccount(data: FindOrCreateAccountInput) {
-    console.debug("[AuthService] Upserting Google account", {
-        provider: data.provider,
-        providerUserId: data.providerUserId,
-        accessToken: maskToken(data.accessToken),
-        refreshToken: maskToken(data.refreshToken),
-        tokenExpiry: data.tokenExpiry?.toISOString() ?? null,
-        userId: data.userId,
-    });
+    async findOrCreateAccount(data: FindOrCreateAccountInput) {
 
     const existingAccount = await prisma.connectedAccount.findUnique({
         where: {

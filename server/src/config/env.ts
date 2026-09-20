@@ -17,5 +17,5 @@ export const env = {
 
     REDIS_URL: process.env.REDIS_URL || "redis://localhost:6379",
 
-    SESSION_SECRET: process.env.SESSION_SECRET || "temp-secret",
+    SESSION_SECRET: process.env.SESSION_SECRET!,
 };

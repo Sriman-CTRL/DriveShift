@@ -20,6 +20,24 @@ class AuthController {
 
         return res.json(user);
     }
+
+    async accounts(req: Request, res: Response) {
+        const authReq = req as AuthRequest;
+
+        const accounts = await prisma.connectedAccount.findMany({
+            where: { userId: authReq.user!.userId },
+            select: {
+                id: true,
+                provider: true,
+                providerUserId: true,
+                createdAt: true,
+                user: { select: { email: true, name: true } },
+            },
+            orderBy: { createdAt: "asc" },
+        });
+
+        return res.json({ accounts });
+    }
 }
 
-export const authController = new AuthController();
+export const authController = new AuthController();
