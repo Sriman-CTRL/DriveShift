@@ -16,3 +16,7 @@ dist/
 
 # Redis dump
 dump.rdb
+
+# Benchmark results (environment-specific timing data — do not commit)
+benchmarks/results/*.json
+benchmarks/results/*.csv

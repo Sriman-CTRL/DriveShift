@@ -26,7 +26,7 @@ export const migrationWorker = new Worker(
     },
     {
         connection,
-        concurrency: 2,
+        concurrency: Number(process.env.WORKER_CONCURRENCY ?? "2"),
     }
 );
 
